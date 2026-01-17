@@ -3,10 +3,32 @@ import { supabase } from '../lib/supabase';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from './ui/card';
-import { Lock, Loader2, PlayCircle } from 'lucide-react';
+import { Lock, Loader2, PlayCircle, Eye, EyeOff } from 'lucide-react';
 import { Toaster, toast } from 'react-hot-toast';
 
 export const IS_AUTHENTICATED_KEY = 'display_board_auth';
+
+// Helper for Password Input
+function PasswordInput(props: React.ComponentProps<typeof Input>) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input 
+        {...props} 
+        type={show ? "text" : "password"} 
+        className={`pr-10 ${props.className || ''}`} 
+      />
+      <button 
+        type="button"
+        onClick={() => setShow(!show)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 focus:outline-none"
+        tabIndex={-1}
+      >
+        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
 
 interface AuthGateProps {
   children: React.ReactNode;
@@ -158,16 +180,14 @@ export default function AuthGate({ children }: AuthGateProps) {
           <CardContent>
             <form onSubmit={handleSetup} className="space-y-4">
               <div className="space-y-2">
-                <Input
-                  type="password"
+                <PasswordInput
                   placeholder="Create Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={verifying}
                   autoFocus
                 />
-                <Input
-                  type="password"
+                <PasswordInput
                   placeholder="Confirm Password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -208,8 +228,7 @@ export default function AuthGate({ children }: AuthGateProps) {
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Input
-                  type="password"
+                <PasswordInput
                   placeholder="Enter Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

@@ -22,7 +22,8 @@ import {
   ImageOff,
   Lock,
   Unlock,
-  KeyRound
+  KeyRound,
+  EyeOff
 } from 'lucide-react';
 
 import { 
@@ -68,6 +69,28 @@ import {
   AlertDialogTrigger,
 } from "./ui/alert-dialog";
 import { Skeleton } from './ui/skeleton';
+
+// Helper component for Password Input with toggle
+function PasswordInput(props: React.ComponentProps<typeof Input>) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <Input 
+        {...props} 
+        type={show ? "text" : "password"} 
+        className={`pr-10 ${props.className || ''}`} 
+      />
+      <button 
+        type="button"
+        onClick={() => setShow(!show)}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 focus:outline-none"
+        tabIndex={-1}
+      >
+        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
 
 // Helper component for editable title
 function EditableTitle({ id, initialTitle, onSave }: { id: string, initialTitle: string, onSave: (id: string, newTitle: string) => void }) {
@@ -402,6 +425,18 @@ export default function AdminPanel() {
   const [settings, setSettings] = useState<AppSettings>({ default_duration: 10, refresh_interval: 5 });
   const [savingSettings, setSavingSettings] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
+  const [isPasswordSet, setIsPasswordSet] = useState(false);
+  
+  // Password Update State
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  // Setup Modal State
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const [setupPassword, setSetupPassword] = useState('');
+  const [setupConfirm, setSetupConfirm] = useState('');
   
   const [duration, setDuration] = useState(10);
   const [title, setTitle] = useState('');
@@ -444,6 +479,10 @@ export default function AdminPanel() {
         // @ts-ignore - Supabase types might be strict, but we know what we asked for
         setSettings(settingsData);
     }
+    
+    // Check if password is set
+    const { data: hasPass } = await supabase.rpc('is_password_set');
+    setIsPasswordSet(!!hasPass);
   };
 
   const saveSettings = async () => {
@@ -457,24 +496,107 @@ export default function AdminPanel() {
             security_enabled: settings.security_enabled
         };
 
-        if (settings.admin_password) {
-            payload.admin_password = settings.admin_password;
-        }
-
+        // Standard save doesn't handle password changes anymore (handled by dedicated function)
+        
         const { error } = await supabase
             .from('settings')
             .upsert(payload);
             
         if (error) throw error;
-        
-        // Clear password field from state after save for security UI feedback
-        setSettings(prev => ({ ...prev, admin_password: '' }));
         toast.success('Settings saved successfully');
     } catch (error) {
         console.error('Error saving settings:', error);
         toast.error('Failed to save settings');
     } finally {
         setSavingSettings(false);
+    }
+  };
+
+  const handleToggleSecurity = async (checked: boolean) => {
+    if (checked) {
+        // Turning ON
+        if (isPasswordSet) {
+            // Password exists, just enable
+             setSettings(prev => ({ ...prev, security_enabled: true }));
+             // We can auto-save here or let user click save. Let's strictly update state and let user save to be consistent with other fields?
+             // Actually requirement says "pop up a modal... if they exit... turn off the toggle". This implies immediate interaction.
+        } else {
+            // No password set, show modal
+            setShowSetupModal(true);
+            return; // Don't set state yet
+        }
+    } else {
+        // Turning OFF - allow
+        setSettings(prev => ({ ...prev, security_enabled: false }));
+    }
+  };
+
+  const handleSetupPassword = async () => {
+    if (setupPassword !== setupConfirm) {
+        toast.error("Passwords do not match");
+        return;
+    }
+    if (!setupPassword) return;
+
+    setSavingSettings(true);
+    try {
+        const { error } = await supabase
+            .from('settings')
+            .update({ 
+                admin_password: setupPassword,
+                security_enabled: true 
+            })
+            .eq('id', 1);
+
+        if (error) throw error;
+
+        toast.success("Security enabled and password set");
+        setSettings(prev => ({ ...prev, security_enabled: true }));
+        setIsPasswordSet(true);
+        setShowSetupModal(false);
+        setSetupPassword('');
+        setSetupConfirm('');
+    } catch (error) {
+        console.error('Setup error', error);
+        toast.error("Failed to setup security");
+    } finally {
+        setSavingSettings(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+        toast.error("New passwords do not match");
+        return;
+    }
+    if (!oldPassword || !newPassword) {
+        toast.error("All fields are required");
+        return;
+    }
+
+    setChangingPassword(true);
+    try {
+        const { data: success, error } = await supabase
+            .rpc('change_admin_password', { 
+                current_password: oldPassword, 
+                new_password: newPassword 
+            });
+
+        if (error) throw error;
+
+        if (success) {
+            toast.success("Password updated successfully");
+            setOldPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        } else {
+            toast.error("Incorrect old password");
+        }
+    } catch (error) {
+        console.error('Change password error', error);
+        toast.error("Failed to update password");
+    } finally {
+        setChangingPassword(false);
     }
   };
 
@@ -914,51 +1036,138 @@ export default function AdminPanel() {
 
                         {/* Security Tab */}
                         {activeTab === 'security' && (
-                            <div className="space-y-4 animate-in fade-in slide-in-from-right-1 duration-200">
-                                <div className="flex items-center justify-between space-x-2 rounded-md border p-3 shadow-sm">
+                            <div className="space-y-6 animate-in fade-in slide-in-from-right-1 duration-200">
+                                <div className="flex items-center justify-between space-x-2 rounded-md border p-3 shadow-sm bg-slate-50">
                                     <Label htmlFor="security-mode" className="flex flex-col space-y-1">
-                                        <span>Password Protection</span>
+                                        <span className="font-semibold">Password Protection</span>
                                         <span className="font-normal text-xs text-muted-foreground">Require login to view content</span>
                                     </Label>
                                     <Switch
                                         id="security-mode"
                                         checked={settings.security_enabled || false}
-                                        onCheckedChange={(checked) => setSettings({...settings, security_enabled: checked})}
+                                        onCheckedChange={handleToggleSecurity}
                                     />
                                 </div>
 
                                 {settings.security_enabled && (
-                                    <div className="space-y-2">
-                                        <Label htmlFor="adminPassword">Update Access Password</Label>
-                                        <div className="relative">
-                                            <KeyRound className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
-                                            <Input 
-                                                id="adminPassword" 
-                                                type="password" 
-                                                placeholder="••••••••"
-                                                className="pl-9"
-                                                value={settings.admin_password || ''}
-                                                onChange={(e) => setSettings({...settings, admin_password: e.target.value})}
-                                            />
+                                    <div className="space-y-4 rounded-md border p-4 bg-white">
+                                        <div className="flex items-center gap-2 pb-2 border-b">
+                                            <KeyRound className="h-4 w-4 text-slate-500" />
+                                            <h3 className="font-medium text-sm">Update Access Password</h3>
                                         </div>
-                                        <p className="text-[0.8rem] text-slate-500">
-                                            Leave blank to keep current password.
-                                        </p>
+                                        
+                                        <div className="space-y-3">
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="oldPass" className="text-xs">Old Password</Label>
+                                                <PasswordInput 
+                                                    id="oldPass" 
+                                                    placeholder="Current Password"
+                                                    value={oldPassword}
+                                                    onChange={(e) => setOldPassword(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="newPass" className="text-xs">New Password</Label>
+                                                <PasswordInput 
+                                                    id="newPass" 
+                                                    placeholder="New Password"
+                                                    value={newPassword}
+                                                    onChange={(e) => setNewPassword(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="confirmPass" className="text-xs">Confirm New Password</Label>
+                                                <PasswordInput 
+                                                    id="confirmPass" 
+                                                    placeholder="Confirm New Password"
+                                                    value={confirmPassword}
+                                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <Button 
+                                            className="w-full" 
+                                            onClick={handleChangePassword}
+                                            disabled={changingPassword}
+                                            variant="secondary"
+                                        >
+                                            {changingPassword ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Updating...
+                                                </>
+                                            ) : 'Update Password'}
+                                        </Button>
                                     </div>
                                 )}
-                                
+
+                                {/* Save button mainly for the toggle if not handled immediately, but good to have global save */}
                                 <Button 
                                     className="w-full" 
                                     onClick={saveSettings}
                                     disabled={savingSettings}
-                                    variant="outline"
                                 >
-                                    {savingSettings ? 'Saving...' : 'Update Security'}
+                                    {savingSettings ? 'Saving...' : 'Save Configuration'}
                                 </Button>
                             </div>
                         )}
                     </CardContent>
                 </Card>
+
+                {/* Setup Password Modal */}
+                {showSetupModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+                        <Card className="w-full max-w-sm border-0 shadow-2xl">
+                            <CardHeader>
+                                <CardTitle>Set Admin Password</CardTitle>
+                                <CardDescription>
+                                    Password protection is enabled. Please set a password for the display board.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="setupPass">Password</Label>
+                                    <PasswordInput
+                                        id="setupPass"
+                                        placeholder="Enter password"
+                                        value={setupPassword}
+                                        onChange={(e) => setSetupPassword(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="setupConfirm">Confirm Password</Label>
+                                    <PasswordInput
+                                        id="setupConfirm"
+                                        placeholder="Confirm password"
+                                        value={setupConfirm}
+                                        onChange={(e) => setSetupConfirm(e.target.value)}
+                                    />
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <Button 
+                                        variant="outline" 
+                                        onClick={() => {
+                                            setShowSetupModal(false);
+                                            // Revert toggle visually (state wasn't updated to true yet)
+                                        }}
+                                        disabled={savingSettings}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button 
+                                        onClick={handleSetupPassword} 
+                                        disabled={savingSettings} 
+                                        className="bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        {savingSettings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Set Password
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
             </div>
 
             {/* Right Column: List */}
