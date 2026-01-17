@@ -19,7 +19,10 @@ import {
   ArrowUp,
   ArrowDown,
   GripVertical,
-  ImageOff
+  ImageOff,
+  Lock,
+  Unlock,
+  KeyRound
 } from 'lucide-react';
 
 import { 
@@ -430,27 +433,41 @@ export default function AdminPanel() {
     
     if (announcementsData) setAnnouncements(announcementsData);
     
-    // Also fetch settings
+    // Also fetch settings (Security: Don't select admin_password)
     const { data: settingsData } = await supabase
       .from('settings')
-      .select('*')
+      .select('id, refresh_interval, default_duration, security_enabled')
       .single();
       
     if (settingsData) {
+        // @ts-ignore - Supabase types might be strict, but we know what we asked for
         setSettings(settingsData);
-        // Update local default if meaningful
-        // setDuration(settingsData.default_duration); 
     }
   };
 
   const saveSettings = async () => {
     setSavingSettings(true);
     try {
+        // Prepare payload, only include password if it is not empty
+        const payload: any = { 
+            id: 1, 
+            refresh_interval: settings.refresh_interval, 
+            default_duration: settings.default_duration,
+            security_enabled: settings.security_enabled
+        };
+
+        if (settings.admin_password) {
+            payload.admin_password = settings.admin_password;
+        }
+
         const { error } = await supabase
             .from('settings')
-            .upsert({ id: 1, ...settings });
+            .upsert(payload);
             
         if (error) throw error;
+        
+        // Clear password field from state after save for security UI feedback
+        setSettings(prev => ({ ...prev, admin_password: '' }));
         toast.success('Settings saved successfully');
     } catch (error) {
         console.error('Error saving settings:', error);
@@ -857,6 +874,58 @@ export default function AdminPanel() {
                                     Save Settings
                                 </>
                             )}
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                {/* Security Card */}
+                 <Card className="flex flex-col">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                             {settings.security_enabled ? <Lock className="h-5 w-5 text-green-600" /> : <Unlock className="h-5 w-5 text-slate-400" />}
+                            Security
+                        </CardTitle>
+                        <CardDescription>Control access to the display system.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex items-center justify-between space-x-2">
+                            <Label htmlFor="security-mode" className="flex flex-col space-y-1">
+                                <span>Password Protection</span>
+                                <span className="font-normal text-xs text-muted-foreground">Require login to view content</span>
+                            </Label>
+                            <Switch
+                                id="security-mode"
+                                checked={settings.security_enabled || false}
+                                onCheckedChange={(checked) => setSettings({...settings, security_enabled: checked})}
+                            />
+                        </div>
+
+                         {settings.security_enabled && (
+                            <div className="space-y-2 pt-2 border-t">
+                                <Label htmlFor="adminPassword">Update Access Password</Label>
+                                <div className="relative">
+                                    <KeyRound className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                                    <Input 
+                                        id="adminPassword" 
+                                        type="password" 
+                                        placeholder="••••••••"
+                                        className="pl-9"
+                                        value={settings.admin_password || ''}
+                                        onChange={(e) => setSettings({...settings, admin_password: e.target.value})}
+                                    />
+                                </div>
+                                <p className="text-[0.8rem] text-slate-500">
+                                    Leave blank to keep current password.
+                                </p>
+                            </div>
+                        )}
+                         <Button 
+                            className="w-full" 
+                            onClick={saveSettings}
+                            disabled={savingSettings}
+                            variant="outline"
+                        >
+                            Update Security
                         </Button>
                     </CardContent>
                 </Card>

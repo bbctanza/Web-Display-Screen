@@ -13,4 +13,6 @@ export interface AppSettings {
   id?: number;
   default_duration: number; // in seconds
   refresh_interval: number; // in minutes
+  security_enabled?: boolean;
+  admin_password?: string; // Only used when updating
 }

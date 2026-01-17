@@ -1,5 +1,6 @@
 ---
 import Display from '../components/Display';
+import AuthGate from '../components/AuthGate';
 import '../styles/global.css';
 ---
 
@@ -12,6 +13,8 @@ import '../styles/global.css';
 		<title>Display Board</title>
 	</head>
 	<body class="bg-black m-0 p-0 overflow-hidden">
-		<Display client:only="react" />
+		<AuthGate client:only="react">
+			<Display client:only="react" />
+		</AuthGate>
 	</body>
 </html>

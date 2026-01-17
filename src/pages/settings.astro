@@ -1,5 +1,6 @@
 ---
 import AdminPanel from '../components/DisplaySettings';
+import AuthGate from '../components/AuthGate';
 import '../styles/global.css';
 ---
 
@@ -12,6 +13,8 @@ import '../styles/global.css';
 		<title>Settings - Display Board</title>
 	</head>
 	<body class="bg-gray-100">
-		<AdminPanel client:only="react" />
+		<AuthGate client:only="react">
+			<AdminPanel client:only="react" />
+		</AuthGate>
 	</body>
 </html>
