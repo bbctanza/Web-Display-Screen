@@ -24,7 +24,9 @@ import {
   Unlock,
   KeyRound,
   EyeOff,
-  LogOut
+  LogOut,
+  Heart,
+  Github
 } from 'lucide-react';
 
 import { 
@@ -1280,6 +1282,22 @@ export default function AdminPanel() {
                     </CardContent>
                 </Card>
             </div>
+        </div>
+
+        <div className="fixed bottom-6 right-6 flex items-center gap-2 text-xs text-slate-400 z-40">
+            <div className="flex items-center gap-1 group select-none pointer-events-none">
+                Made with <Heart className="h-3 w-3 text-slate-400 group-hover:fill-red-500 group-hover:text-red-500 transition-colors pointer-events-auto" /> by <span className="font-medium text-slate-500">Karl</span>
+            </div>
+            <div className="h-3 w-px bg-slate-200 mx-1"></div>
+            <a 
+                href="https://github.com/ItzMeKarlix/" 
+                target="_blank" 
+                rel="noreferrer"
+                className="hover:text-slate-600 transition-colors"
+                title="Only Karl"
+            >
+                <Github className="h-4 w-4" />
+            </a>
         </div>
 
         {/* Upload Confirmation Modal */}

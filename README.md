@@ -1,4 +1,4 @@
-# Scrollable Display Board System
+# Web Display Screen System
 
 A dynamic, web-based digital signage application built with Astro, React, and Supabase. Features a public scrolling display board and a secure, password-protected admin settings panel.
 
