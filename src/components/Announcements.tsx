@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Announcement } from '../types';
+import { ChevronLeft, ChevronRight, Settings, Loader2 } from 'lucide-react';
 
 export default function Announcements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -64,7 +65,11 @@ export default function Announcements() {
   }, [currentIndex, announcements]);
 
   if (loading) {
-    return <div className="flex h-screen w-full items-center justify-center bg-black text-white">Loading...</div>;
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-black text-white">
+        <Loader2 className="h-10 w-10 animate-spin text-white/50" />
+      </div>
+    );
   }
 
   if (announcements.length === 0) {
@@ -97,8 +102,16 @@ export default function Announcements() {
     return isActive ? 'opacity-100' : 'opacity-0';
   };
 
+  const handlePrev = () => {
+    setCurrentIndex((prev) => (prev - 1 + announcements.length) % announcements.length);
+  };
+
+  const handleNext = () => {
+    setCurrentIndex((prev) => (prev + 1) % announcements.length);
+  };
+
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-black">
+    <div className="relative h-screen w-full overflow-hidden bg-black group">
       {announcements.map((item, index) => (
         <div
           key={item.id}
@@ -123,14 +136,42 @@ export default function Announcements() {
         </div>
       ))}
       
-      {/* Optional: Progress bar or indicator */}
-      <div className="absolute bottom-10 left-0 right-0 flex justify-center gap-2">
-        {announcements.map((_, idx) => (
-           <div 
-             key={idx}
-             className={`h-2 w-2 rounded-full ${idx === currentIndex ? 'bg-white' : 'bg-gray-700'}`}
-           />
-        ))}
+      {/* Admin Button */}
+      <div className="absolute top-4 right-4 z-50 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+        <a 
+            href="/admin"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-black/30 text-white/70 backdrop-blur-sm transition-all hover:bg-black/50 hover:text-white hover:scale-110"
+            title="Go to Admin Panel"
+        >
+            <Settings className="h-5 w-5" />
+        </a>
+      </div>
+
+      {/* Navigation Controls */}
+      <div className="absolute bottom-10 left-0 right-0 z-50 flex items-center justify-center gap-6 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+        <button 
+            onClick={handlePrev}
+            className="rounded-full bg-black/30 p-2 text-white/70 backdrop-blur-sm transition-all hover:bg-black/50 hover:text-white hover:scale-110"
+        >
+            <ChevronLeft className="h-6 w-6" />
+        </button>
+
+        <div className="flex gap-2">
+            {announcements.map((_, idx) => (
+            <button 
+                key={idx}
+                onClick={() => setCurrentIndex(idx)}
+                className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${idx === currentIndex ? 'bg-white scale-110' : 'bg-white/30 hover:bg-white/50'}`}
+            />
+            ))}
+        </div>
+
+        <button 
+            onClick={handleNext}
+            className="rounded-full bg-black/30 p-2 text-white/70 backdrop-blur-sm transition-all hover:bg-black/50 hover:text-white hover:scale-110"
+        >
+            <ChevronRight className="h-6 w-6" />
+        </button>
       </div>
     </div>
   );
