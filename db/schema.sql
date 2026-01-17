@@ -6,6 +6,7 @@ create table if not exists public.announcements (
   id uuid default gen_random_uuid() primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   image_url text not null,
+  title text default 'Untitled Announcement',
   display_duration integer default 10,
   transition_type text default 'fade',
   active boolean default true
@@ -43,14 +44,40 @@ on public.announcements for delete
 to public
 using ( true );
 
--- 4. Create the Storage Bucket
--- Note: 'insert into storage.buckets' requires special permissions or running inside the dashboard SQL editor
+-- 4. Create the Settings Table
+create table if not exists public.settings (
+  id integer primary key default 1,
+  refresh_interval integer default 5, -- in minutes
+  default_duration integer default 10, -- in seconds
+  constraint single_row check (id = 1)
+);
+
+alter table public.settings enable row level security;
+
+drop policy if exists "Public Settings are viewable by everyone" on public.settings;
+drop policy if exists "Anyone can update settings" on public.settings;
+
+create policy "Public Settings are viewable by everyone"
+on public.settings for select
+to public
+using ( true );
+
+create policy "Anyone can update settings"
+on public.settings for update
+to public
+using ( true );
+
+insert into public.settings (id, refresh_interval, default_duration)
+values (1, 5, 10)
+on conflict (id) do nothing;
+
+-- 5. Create the Storage Bucket
 insert into storage.buckets (id, name, public)
 values ('announcements', 'announcements', true)
 on conflict (id) do update
 set public = true; 
 
--- 5. Storage Policies
+-- 6. Storage Policies
 drop policy if exists "Public Access" on storage.objects;
 drop policy if exists "Public Upload" on storage.objects;
 

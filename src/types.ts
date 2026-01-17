@@ -8,6 +8,7 @@ export interface Announcement {
 }
 
 export interface AppSettings {
-  default_duration: number;
-  refresh_interval: number; // in minutes, to check for new images
+  id?: number;
+  default_duration: number; // in seconds
+  refresh_interval: number; // in minutes
 }

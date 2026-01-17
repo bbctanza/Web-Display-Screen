@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Announcement } from '../types';
+import type { Announcement, AppSettings } from '../types';
 import toast, { Toaster } from 'react-hot-toast';
 import { 
   Trash2, 
@@ -11,7 +11,11 @@ import {
   Loader2,
   ImagePlus,
   Pencil,
-  Check
+  Check,
+  UploadCloud,
+  Settings,
+  Save,
+  ChevronDown
 } from 'lucide-react';
 
 import { Button } from './ui/button';
@@ -94,27 +98,81 @@ function EditableTitle({ id, initialTitle, onSave }: { id: string, initialTitle:
 export default function AdminPanel() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>({ default_duration: 10, refresh_interval: 5 });
+  const [savingSettings, setSavingSettings] = useState(false);
+  
   const [duration, setDuration] = useState(10);
   const [title, setTitle] = useState('');
   
+  // Scroll Indicator State
+  const [canScrollDown, setCanScrollDown] = useState(false);
+  const scrollSentinelRef = useRef<HTMLDivElement>(null);
+
   // Upload Modal State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // View Modal State
   const [viewUrl, setViewUrl] = useState<string | null>(null);
   
   const fetchAnnouncements = async () => {
-    const { data, error } = await supabase
+    const { data: announcementsData } = await supabase
       .from('announcements')
       .select('*')
       .order('created_at', { ascending: false });
-    if (data) setAnnouncements(data);
+    
+    if (announcementsData) setAnnouncements(announcementsData);
+    
+    // Also fetch settings
+    const { data: settingsData } = await supabase
+      .from('settings')
+      .select('*')
+      .single();
+      
+    if (settingsData) {
+        setSettings(settingsData);
+        // Update local default if meaningful
+        // setDuration(settingsData.default_duration); 
+    }
+  };
+
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    try {
+        const { error } = await supabase
+            .from('settings')
+            .upsert({ id: 1, ...settings });
+            
+        if (error) throw error;
+        toast.success('Settings saved successfully');
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        toast.error('Failed to save settings');
+    } finally {
+        setSavingSettings(false);
+    }
   };
 
   useEffect(() => {
     fetchAnnouncements();
   }, []);
+
+  // Update scroll indicator when announcements change
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setCanScrollDown(!entry.isIntersecting);
+      },
+      { threshold: 1.0 }
+    );
+
+    if (scrollSentinelRef.current) {
+      observer.observe(scrollSentinelRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [announcements]);
 
   // Cleanup preview URL on unmount or change
   useEffect(() => {
@@ -123,13 +181,42 @@ export default function AdminPanel() {
     };
   }, [uploadPreviewUrl]);
 
+  const processFile = (file: File) => {
+    setSelectedFile(file);
+    setUploadPreviewUrl(URL.createObjectURL(file));
+    if (!title) {
+        setTitle(file.name.split('.').slice(0, -1).join('.'));
+    }
+  };
+
   const onFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      const file = event.target.files[0];
-      setSelectedFile(file);
-      setUploadPreviewUrl(URL.createObjectURL(file));
-      // Reset input value to allow selecting same file again if needed
+      processFile(event.target.files[0]);
       event.target.value = ''; 
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+        processFile(file);
+      } else {
+        toast.error('Please upload an image or video file');
+      }
     }
   };
 
@@ -241,12 +328,8 @@ export default function AdminPanel() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-      <Toaster position="top-right" />
-      <div className="mx-auto max-w-5xl space-y-8">
-        
-        {/* Header */}
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-h-screen bg-slate-50 p-8">
+        <header className="mb-8 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">Announcement Admin</h1>
             <p className="text-slate-500">Manage the content displayed on your announcements system.</p>
@@ -270,42 +353,102 @@ export default function AdminPanel() {
                     <CardContent className="space-y-4">
                         <div className="grid w-full items-center gap-1.5">
                             <Label htmlFor="image">Media File</Label>
-                            <div className="relative">
+                            <div 
+                                className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors ${
+                                    isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'
+                                }`}
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                            >
+                                <div className="flex flex-col items-center justify-center space-y-2 text-center">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                                        {isDragging ? (
+                                            <UploadCloud className="h-6 w-6 text-blue-500" />
+                                        ) : (
+                                            <ImagePlus className="h-6 w-6 text-slate-400" />
+                                        )}
+                                    </div>
+                                    <div className="flex flex-col space-y-1">
+                                        <p className="text-sm font-medium text-slate-700">
+                                            {isDragging ? 'Drop file here' : 'Drag & drop or click to upload'}
+                                        </p>
+                                        <p className="text-xs text-slate-500">
+                                            Images and Videos supported
+                                        </p>
+                                    </div>
+                                </div>
                                 <Input
                                     id="image"
                                     type="file"
                                     accept="image/*,video/*"
                                     onChange={onFileSelect}
                                     disabled={uploading}
-                                    className="cursor-pointer file:cursor-pointer"
+                                    className="absolute inset-0 cursor-pointer opacity-0 h-full w-full"
                                 />
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                                   <ImagePlus className="h-4 w-4 text-slate-400" />
-                                </div>
                             </div>
                         </div>
 
                         <div className="grid w-full items-center gap-1.5">
-                            <Label htmlFor="title">Title (Optional)</Label>
-                            <Input
-                                id="title"
-                                type="text"
-                                placeholder="Enter announcement name"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Settings Card */}
+                <Card className="mt-8">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Settings className="h-5 w-5" />
+                            System Settings
+                        </CardTitle>
+                        <CardDescription>Global configuration for the display board.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="refreshInterval">Refresh Interval (minutes)</Label>
+                            <Input 
+                                id="refreshInterval" 
+                                type="number" 
+                                min="1"
+                                value={settings.refresh_interval}
+                                onChange={(e) => setSettings({...settings, refresh_interval: Number(e.target.value)})}
                             />
+                            <p className="text-[0.8rem] text-slate-500">
+                                How often the display board checks for new content.
+                            </p>
                         </div>
 
-                        <div className="grid w-full items-center gap-1.5">
-                            <Label htmlFor="duration">Display Duration (seconds)</Label>
-                            <Input
-                                id="duration"
-                                type="number"
-                                value={duration}
-                                onChange={(e) => setDuration(Number(e.target.value))}
-                                min="1"
+                        <div className="space-y-2">
+                            <Label htmlFor="defaultDuration">Default Duration (seconds)</Label>
+                            <Input 
+                                id="defaultDuration" 
+                                type="number" 
+                                min="5"
+                                value={settings.default_duration}
+                                onChange={(e) => setSettings({...settings, default_duration: Number(e.target.value)})}
                             />
+                            <p className="text-[0.8rem] text-slate-500">
+                                Default time for new uploads (can be overridden).
+                            </p>
                         </div>
+
+                        <Button 
+                            className="w-full" 
+                            onClick={saveSettings}
+                            disabled={savingSettings}
+                        >
+                            {savingSettings ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Saving...
+                                </>
+                            ) : (
+                                <>
+                                    <Save className="mr-2 h-4 w-4" />
+                                    Save Settings
+                                </>
+                            )}
+                        </Button>
                     </CardContent>
                 </Card>
             </div>
@@ -319,7 +462,7 @@ export default function AdminPanel() {
                             {announcements.length} active announcement{announcements.length !== 1 && 's'}
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="flex-1 p-0 overflow-hidden">
+                    <CardContent className="flex-1 p-0 overflow-hidden relative">
                         <ScrollArea className="h-full p-6">
                             <div className="space-y-4">
                                 {announcements.map((item) => (
@@ -347,7 +490,7 @@ export default function AdminPanel() {
                                         <div className="flex items-center gap-2">
                                             <EditableTitle 
                                                 id={item.id} 
-                                                initialTitle={item.title} 
+                                                initialTitle={(item as any).title} 
                                                 onSave={updateTitle} 
                                             />
                                             <span className={`inline-flex h-2 w-2 rounded-full ${item.active ? 'bg-green-500' : 'bg-slate-300'}`} />
@@ -406,8 +549,20 @@ export default function AdminPanel() {
                                     <p className="text-sm">No announcements found</p>
                                 </div>
                             )}
+                            
+                            {/* Scroll Sentinel */}
+                            <div ref={scrollSentinelRef} className="h-px w-full" />
                         </div>
                         </ScrollArea>
+                        
+                        {/* Scroll Indicator Overlay */}
+                        {canScrollDown && announcements.length > 0 && (
+                            <div className="absolute bottom-4 left-0 right-0 flex justify-center pointer-events-none">
+                                <div className="flex items-center gap-2 rounded-full bg-slate-900/10 backdrop-blur-sm px-4 py-1.5 text-xs font-medium text-slate-600 shadow-sm animate-pulse border border-slate-200/50">
+                                    More below <ChevronDown className="h-3 w-3" />
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -432,14 +587,26 @@ export default function AdminPanel() {
                      )}
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                     <div className="space-y-1">
-                        <span className="text-slate-500">File Name</span>
-                        <p className="font-medium truncate" title={selectedFile.name}>{selectedFile.name}</p>
+                  <div className="grid gap-4 text-sm">
+                     <div className="space-y-1.5">
+                        <Label htmlFor="title">Title (Optional)</Label>
+                        <Input
+                            id="title"
+                            type="text"
+                            placeholder="Enter announcement name"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                        />
                      </div>
-                     <div className="space-y-1">
-                        <span className="text-slate-500">Duration</span>
-                        <p className="font-medium">{duration} seconds</p>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="duration">Display Duration (seconds)</Label>
+                        <Input
+                            id="duration"
+                            type="number"
+                            value={duration}
+                            onChange={(e) => setDuration(Number(e.target.value))}
+                            min="1"
+                        />
                      </div>
                   </div>
                   
@@ -480,6 +647,5 @@ export default function AdminPanel() {
         )}
 
       </div>
-    </div>
   );
 }

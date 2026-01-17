@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Announcement } from '../types';
 
@@ -6,9 +6,11 @@ export default function Announcements() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState(5); // Default 5 mins
 
   // Fetch data
   const fetchAnnouncements = async () => {
+    // 1. Fetch announcements
     const { data, error } = await supabase
       .from('announcements')
       .select('*')
@@ -20,16 +22,32 @@ export default function Announcements() {
     } else {
       setAnnouncements(data || []);
     }
+
+    // 2. Fetch settings
+    const { data: settings } = await supabase
+        .from('settings')
+        .select('refresh_interval')
+        .single();
+    
+    if (settings) {
+        setRefreshInterval(settings.refresh_interval);
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
     fetchAnnouncements();
-    
-    // Poll for updates every 5 minutes
-    const pollInterval = setInterval(fetchAnnouncements, 5 * 60 * 1000);
-    return () => clearInterval(pollInterval);
   }, []);
+
+  // Poll for updates
+  useEffect(() => {
+    if (refreshInterval <= 0) return;
+    
+    const intervalMs = refreshInterval * 60 * 1000;
+    const pollInterval = setInterval(fetchAnnouncements, intervalMs);
+    return () => clearInterval(pollInterval);
+  }, [refreshInterval]);
 
   // Cycle logic
   useEffect(() => {
