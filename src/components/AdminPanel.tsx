@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Announcement } from '../types';
+import toast, { Toaster } from 'react-hot-toast';
 import { 
   Trash2, 
   Upload, 
@@ -22,6 +23,7 @@ import {
   CardTitle, 
   CardDescription 
 } from './ui/card';
+import { ScrollArea } from './ui/scroll-area';
 
 export default function AdminPanel() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -72,6 +74,8 @@ export default function AdminPanel() {
   const confirmUpload = async () => {
     if (!selectedFile) return;
 
+    const loadingToast = toast.loading('Uploading media...');
+
     try {
       setUploading(true);
       
@@ -106,12 +110,15 @@ export default function AdminPanel() {
 
       if (dbError) throw dbError;
       
+      toast.success('Announcement uploaded successfully!');
       fetchAnnouncements(); // Refresh list
       cancelUpload(); // Close modal
     } catch (error: any) {
-      alert('Error uploading document: ' + error.message);
+      console.error(error);
+      toast.error(error.message || 'Error uploading announcement');
     } finally {
       setUploading(false);
+      toast.dismiss(loadingToast);
     }
   };
 
@@ -122,11 +129,18 @@ export default function AdminPanel() {
       .update({ active: newCheckedState })
       .eq('id', id);
     
-    if (!error) fetchAnnouncements();
+    if (error) {
+      toast.error('Failed to update status');
+    } else {
+      toast.success(newCheckedState ? 'Announcement activated' : 'Announcement hidden');
+      fetchAnnouncements();
+    }
   };
 
   const deleteAnnouncement = async (id: string, imageUrl: string) => {
     if (!confirm('Are you sure you want to delete this announcement?')) return;
+
+    const deletingToast = toast.loading('Deleting announcement...');
 
     // Delete record
     const { error } = await supabase
@@ -134,11 +148,18 @@ export default function AdminPanel() {
       .delete()
       .eq('id', id);
 
-    if (!error) fetchAnnouncements();
+    if (error) {
+      toast.error('Failed to delete announcement');
+    } else {
+      toast.success('Announcement deleted');
+      fetchAnnouncements();
+    }
+    toast.dismiss(deletingToast);
   };
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+      <Toaster position="top-right" />
       <div className="mx-auto max-w-5xl space-y-8">
         
         {/* Header */}
@@ -197,16 +218,17 @@ export default function AdminPanel() {
 
             {/* Right Column: List */}
             <div className="lg:col-span-2">
-                <Card>
+                <Card className="flex flex-col h-[750px]">
                     <CardHeader>
                         <CardTitle>Manage Content</CardTitle>
                         <CardDescription>
                             {announcements.length} active announcement{announcements.length !== 1 && 's'}
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {announcements.map((item) => (
+                    <CardContent className="flex-1 p-0 overflow-hidden">
+                        <ScrollArea className="h-full p-6">
+                            <div className="space-y-4">
+                                {announcements.map((item) => (
                                 <div 
                                     key={item.id} 
                                     className="flex flex-col gap-4 rounded-lg border p-4 sm:flex-row sm:items-center bg-white shadow-sm"
@@ -270,6 +292,7 @@ export default function AdminPanel() {
                                 </div>
                             )}
                         </div>
+                        </ScrollArea>
                     </CardContent>
                 </Card>
             </div>
