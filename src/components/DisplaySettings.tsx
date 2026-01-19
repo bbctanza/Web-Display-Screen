@@ -1364,7 +1364,7 @@ export default function AdminPanel() {
 
         {/* Full View Modal */}
         {viewUrl && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 backdrop-blur-md" onClick={() => setViewUrl(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md" onClick={() => setViewUrl(null)}>
             <Button 
                 variant="ghost" 
                 size="icon"

@@ -78,6 +78,11 @@ on public.settings for update
 to public
 using ( true );
 
+create policy "Anyone can insert settings"
+on public.settings for insert
+to public
+with check ( true );
+
 -- ==========================================
 -- 3. Functions (RPC) for Security
 -- ==========================================
