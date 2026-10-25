@@ -80,7 +80,7 @@ export default function AuthGate({ children }: AuthGateProps) {
       }
 
       // 3. Password Set - Check Local Session
-      const localAuth = sessionStorage.getItem(IS_AUTHENTICATED_KEY);
+      const localAuth = localStorage.getItem(IS_AUTHENTICATED_KEY);
       if (localAuth === 'true') {
          setIsLocked(false);
          setIsAuthenticated(true);
@@ -115,7 +115,7 @@ export default function AuthGate({ children }: AuthGateProps) {
         if (error) throw error;
         if (!created) throw new Error('Password is already configured or does not meet requirements');
 
-        sessionStorage.setItem(IS_AUTHENTICATED_KEY, 'true');
+        localStorage.setItem(IS_AUTHENTICATED_KEY, 'true');
         toast.success("Security Configured");
         setIsLocked(false);
         setIsAuthenticated(true);
@@ -139,7 +139,7 @@ export default function AuthGate({ children }: AuthGateProps) {
       if (error) throw error;
 
       if (isValid) {
-        sessionStorage.setItem(IS_AUTHENTICATED_KEY, 'true');
+        localStorage.setItem(IS_AUTHENTICATED_KEY, 'true');
         setIsLocked(false);
         setIsAuthenticated(true);
         toast.success('Access Granted');

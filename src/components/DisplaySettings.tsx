@@ -984,7 +984,7 @@ export default function AdminPanel() {
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('display_board_auth');
+    localStorage.removeItem('display_board_auth');
     window.location.reload();
   };
 
